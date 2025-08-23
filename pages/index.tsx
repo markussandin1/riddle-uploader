@@ -320,13 +320,13 @@ export default function Home() {
               <h2>🔥 Manuell Trigger</h2>
               <form onSubmit={triggerManual} className="rss-form">
                 <div className="form-group">
-                  <label htmlFor="title">Titel (valfri):</label>
+                  <label htmlFor="title">Sajt att skapa quiz för:</label>
                   <input
                     id="title"
                     type="text"
                     value={customTitle}
                     onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="Custom trigger titel..."
+                    placeholder="t.ex. www.example.com eller Example Company"
                   />
                 </div>
                 
@@ -336,7 +336,7 @@ export default function Home() {
                     id="description"
                     value={customDescription}
                     onChange={(e) => setCustomDescription(e.target.value)}
-                    placeholder="Custom trigger beskrivning..."
+                    placeholder="t.ex. Skapa quiz om företagets produkter eller tjänster"
                     rows={3}
                   />
                 </div>
