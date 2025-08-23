@@ -85,11 +85,11 @@ export default async function handler(
     console.log('Riddle API response:', JSON.stringify(result, null, 2));
     
     // Handle Riddle API response format
-    const quizData = result.data || result;
-    const uuid = quizData.UUID || quizData.uniqid || quizData.id;
+    const responseData = result.data || result;
+    const uuid = responseData.UUID || responseData.uniqid || responseData.id;
     
     // Check if published - Riddle API uses published.at timestamp to indicate published status
-    const publishedInfo = quizData.published;
+    const publishedInfo = responseData.published;
     const isPublished = publishedInfo && publishedInfo.at ? true : false;
     
     return res.status(200).json({
@@ -97,8 +97,8 @@ export default async function handler(
       message: 'Quiz uploaded to Riddle successfully!',
       data: {
         UUID: uuid,
-        title: quizData.title,
-        created: quizData.created,
+        title: responseData.title,
+        created: responseData.created,
         published: isPublished,
         publishedAt: publishedInfo?.at || null,
         viewUrl: isPublished && uuid ? `https://www.riddle.com/view/${uuid}` : null,
