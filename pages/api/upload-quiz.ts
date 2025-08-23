@@ -14,7 +14,8 @@ export default async function handler(
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  const { quizData } = req.body;
+  // Handle both formats: wrapped in quizData or direct JSON
+  const quizData = req.body.quizData || req.body;
 
   if (!quizData) {
     return res.status(400).json({ 

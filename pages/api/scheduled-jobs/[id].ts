@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { updateScheduledJob, deleteScheduledJob, loadScheduledJobs } from '../../../lib/feed-store';
-import { startJob, stopJob, restartJob } from '../../../lib/scheduler';
+import { updateScheduledJob, deleteScheduledJob, loadScheduledJobs } from '../../../lib/memory-store';
+import { startJob, stopJob, restartJob } from '../../../lib/memory-scheduler';
 import * as cron from 'node-cron';
 
 export default function handler(

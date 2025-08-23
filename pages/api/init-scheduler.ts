@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { startScheduler } from '../../lib/scheduler';
+import { startScheduler } from '../../lib/memory-scheduler';
 
 let schedulerInitialized = false;
 

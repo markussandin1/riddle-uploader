@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { loadFeedItems } from '../../lib/feed-store';
+import { loadFeedItems } from '../../lib/memory-store';
 
 export default function handler(
   req: NextApiRequest,
