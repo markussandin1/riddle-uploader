@@ -32,8 +32,6 @@ export default function Home() {
   // RSS form states
   const [customTitle, setCustomTitle] = useState('');
   const [customDescription, setCustomDescription] = useState('');
-  const [jobName, setJobName] = useState('');
-  const [cronPattern, setCronPattern] = useState('');
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
@@ -45,19 +43,11 @@ export default function Home() {
 
   const fetchRssData = async () => {
     try {
-      const [itemsRes, jobsRes] = await Promise.all([
-        fetch('/api/feed-items'),
-        fetch('/api/scheduled-jobs')
-      ]);
+      const itemsRes = await fetch('/api/feed-items');
       
       if (itemsRes.ok) {
         const items = await itemsRes.json();
         setFeedItems(items);
-      }
-      
-      if (jobsRes.ok) {
-        const jobs = await jobsRes.json();
-        setScheduledJobs(jobs);
       }
     } catch (error) {
       showRssMessage('error', 'Fel vid laddning av data');
@@ -99,71 +89,6 @@ export default function Home() {
     }
   };
 
-  const addScheduledJob = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await fetch('/api/scheduled-jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: jobName,
-          cronPattern: cronPattern,
-          enabled: true
-        })
-      });
-
-      if (response.ok) {
-        showRssMessage('success', `Schemalagt jobb "${jobName}" skapat`);
-        setJobName('');
-        setCronPattern('');
-        fetchRssData();
-      } else {
-        const error = await response.json();
-        showRssMessage('error', error.message || 'Fel vid skapande av schemalagt jobb');
-      }
-    } catch (error) {
-      showRssMessage('error', 'Nätverksfel');
-    }
-  };
-
-  const toggleJob = async (jobId: string, enabled: boolean) => {
-    try {
-      const response = await fetch(`/api/scheduled-jobs/${jobId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      });
-
-      if (response.ok) {
-        showRssMessage('success', `Jobb ${enabled ? 'aktiverat' : 'inaktiverat'}`);
-        fetchRssData();
-      } else {
-        showRssMessage('error', 'Fel vid uppdatering av jobb');
-      }
-    } catch (error) {
-      showRssMessage('error', 'Nätverksfel');
-    }
-  };
-
-  const deleteJob = async (jobId: string) => {
-    if (!confirm('Är du säker på att du vill ta bort detta schemalagda jobb?')) return;
-    
-    try {
-      const response = await fetch(`/api/scheduled-jobs/${jobId}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        showRssMessage('success', 'Jobb raderat');
-        fetchRssData();
-      } else {
-        showRssMessage('error', 'Fel vid radering av jobb');
-      }
-    } catch (error) {
-      showRssMessage('error', 'Nätverksfel');
-    }
-  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -241,7 +166,7 @@ export default function Home() {
           ) : (
             <div>
               <h1>📡 RSS Trigger Generator</h1>
-              <p>Skapa RSS-triggers manuellt eller schemalagt för att trigga dina AI-workflows</p>
+              <p>Skapa RSS-triggers manuellt för att trigga dina AI-workflows</p>
               
               <div className="rss-link">
                 <strong>RSS Feed URL:</strong>
@@ -252,6 +177,12 @@ export default function Home() {
                 >
                   📋 Kopiera
                 </button>
+              </div>
+              
+              <div className="navigation-links">
+                <a href="/rss-triggers" className="nav-link">
+                  ⚙️ Avancerade RSS funktioner (schemaläggning)
+                </a>
               </div>
             </div>
           )}
@@ -347,72 +278,6 @@ export default function Home() {
               </form>
             </section>
 
-            {/* Scheduled Jobs */}
-            <section className="card">
-              <h2>⏰ Schemalagda Jobb</h2>
-              
-              <form onSubmit={addScheduledJob} className="rss-form">
-                <div className="form-group">
-                  <label htmlFor="job-name">Jobbnamn:</label>
-                  <input
-                    id="job-name"
-                    type="text"
-                    value={jobName}
-                    onChange={(e) => setJobName(e.target.value)}
-                    placeholder="t.ex. 'Daglig trigger'"
-                    required
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="cron-pattern">Cron Pattern:</label>
-                  <input
-                    id="cron-pattern"
-                    type="text"
-                    value={cronPattern}
-                    onChange={(e) => setCronPattern(e.target.value)}
-                    placeholder="t.ex. '0 9 * * *' för varje dag 09:00"
-                    required
-                  />
-                  <small>
-                    Exempel: '*/5 * * * *' (var 5:e minut), '0 9 * * *' (09:00 varje dag), '0 9 * * 1' (09:00 varje måndag)
-                  </small>
-                </div>
-                
-                <button type="submit" className="btn-secondary">
-                  ➕ Lägg till schemalagt jobb
-                </button>
-              </form>
-
-              {scheduledJobs.length > 0 && (
-                <div className="jobs-list">
-                  <h3>Aktiva schemalagda jobb:</h3>
-                  {scheduledJobs.map(job => (
-                    <div key={job.id} className="job-item">
-                      <div className="job-info">
-                        <strong>{job.name}</strong>
-                        <span className="cron-pattern">{job.cronPattern}</span>
-                        {job.lastRun && <span className="last-run">Senast: {new Date(job.lastRun).toLocaleString('sv-SE')}</span>}
-                      </div>
-                      <div className="job-actions">
-                        <button
-                          onClick={() => toggleJob(job.id, !job.enabled)}
-                          className={`btn-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
-                        >
-                          {job.enabled ? '⏸️ Pausa' : '▶️ Starta'}
-                        </button>
-                        <button
-                          onClick={() => deleteJob(job.id)}
-                          className="btn-delete"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
 
             {/* Recent Triggers */}
             <section className="card">
@@ -525,6 +390,28 @@ export default function Home() {
 
           .copy-btn:hover {
             background: #0056b3;
+          }
+
+          .navigation-links {
+            margin-top: 15px;
+          }
+
+          .nav-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            color: #007bff;
+            text-decoration: none;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            font-size: 14px;
+            transition: all 0.2s;
+          }
+
+          .nav-link:hover {
+            background: #007bff;
+            color: white;
+            text-decoration: none;
           }
 
           .sections {
