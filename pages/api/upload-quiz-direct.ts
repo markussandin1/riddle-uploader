@@ -82,16 +82,27 @@ export default async function handler(
     }
 
     const result = await riddleResponse.json();
+    console.log('Riddle API response:', JSON.stringify(result, null, 2));
+    
+    // Handle Riddle API response format
+    const quizData = result.data || result;
+    const uuid = quizData.UUID || quizData.uniqid || quizData.id;
+    
+    // Check if published - Riddle API uses published.at timestamp to indicate published status
+    const publishedInfo = quizData.published;
+    const isPublished = publishedInfo && publishedInfo.at ? true : false;
     
     return res.status(200).json({
       success: true,
       message: 'Quiz uploaded to Riddle successfully!',
       data: {
-        UUID: result.UUID,
-        title: result.title,
-        created: result.created,
-        published: result.published,
-        viewUrl: result.published ? `https://www.riddle.com/view/${result.UUID}` : null
+        UUID: uuid,
+        title: quizData.title,
+        created: quizData.created,
+        published: isPublished,
+        publishedAt: publishedInfo?.at || null,
+        viewUrl: isPublished && uuid ? `https://www.riddle.com/view/${uuid}` : null,
+        rawResponse: result // Include raw response for debugging
       }
     });
 
