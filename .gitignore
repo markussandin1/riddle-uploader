@@ -24,3 +24,6 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Local data storage
+data/
