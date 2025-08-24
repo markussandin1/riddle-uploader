@@ -2,11 +2,11 @@
 // Note: Scheduled jobs won't persist across serverless function cold starts
 // For production, consider using Vercel Cron Jobs or external cron services
 
-import { loadScheduledJobs, addFeedItem } from './memory-store';
+import { loadScheduledJobs, addFeedItem } from './kv-store';
 
 let schedulerInitialized = false;
 
-export const startScheduler = () => {
+export const startScheduler = async () => {
   if (schedulerInitialized) {
     console.log('Scheduler already initialized');
     return;
@@ -15,7 +15,7 @@ export const startScheduler = () => {
   console.log('Starting RSS trigger scheduler (memory-based)...');
   
   // Load jobs but don't actually start cron jobs in serverless environment
-  const jobs = loadScheduledJobs();
+  const jobs = await loadScheduledJobs();
   console.log(`Found ${jobs.length} scheduled jobs (Note: Cron scheduling not available in serverless)`);
   
   schedulerInitialized = true;

@@ -1,4 +1,4 @@
-import { FeedItem } from './edge-config-store';
+import { FeedItem } from './kv-store';
 
 export const generateRSSFeed = (items: FeedItem[], title: string = 'RSS Trigger Feed'): string => {
   const now = new Date().toUTCString();

@@ -1,5 +1,5 @@
 import * as cron from 'node-cron';
-import { loadScheduledJobs, updateScheduledJob, addFeedItem } from './feed-store';
+import { loadScheduledJobs, updateScheduledJob, addFeedItem } from './kv-store';
 
 interface ActiveJob {
   id: string;
@@ -8,11 +8,11 @@ interface ActiveJob {
 
 let activeJobs: ActiveJob[] = [];
 
-export const startScheduler = () => {
+export const startScheduler = async () => {
   console.log('Starting RSS trigger scheduler...');
   
   // Load and start all enabled jobs
-  const jobs = loadScheduledJobs();
+  const jobs = await loadScheduledJobs();
   
   jobs.forEach(job => {
     if (job.enabled && cron.validate(job.cronPattern)) {
@@ -23,16 +23,13 @@ export const startScheduler = () => {
   console.log(`Started ${activeJobs.length} scheduled jobs`);
 };
 
-export const startJob = (id: string, name: string, cronPattern: string) => {
+export const startJob = async (id: string, name: string, cronPattern: string) => {
   try {
-    const task = cron.schedule(cronPattern, () => {
+    const task = cron.schedule(cronPattern, async () => {
       console.log(`Executing scheduled job: ${name}`);
       
       // Add new RSS item
-      const item = addFeedItem(
-        `Scheduled: ${name}`,
-        `Automatically triggered by scheduled job "${name}" at ${new Date().toISOString()}`
-      );
+      const item = await addFeedItem(`Scheduled: ${name}`, `Triggered scheduled job "${name}" at ${new Date().toISOString()}`);
       
       // Update job last run time
       updateScheduledJob(id, { 

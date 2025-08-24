@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { updateScheduledJob, deleteScheduledJob, loadScheduledJobs } from '../../../lib/memory-store';
+import { updateScheduledJob, deleteScheduledJob, loadScheduledJobs } from '../../../lib/kv-store';
 import { startJob, stopJob, restartJob } from '../../../lib/memory-scheduler';
 import * as cron from 'node-cron';
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -38,7 +38,7 @@ export default function handler(
       }
       
       // Handle job state changes
-      const jobs = loadScheduledJobs();
+      const jobs = await loadScheduledJobs();
       const job = jobs.find(j => j.id === id);
       
       if (job) {

@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { loadScheduledJobs, addScheduledJob } from '../../lib/memory-store';
+import { loadScheduledJobs, addScheduledJob } from '../../lib/kv-store';
 import { startJob } from '../../lib/memory-scheduler';
 import * as cron from 'node-cron';
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -30,7 +30,7 @@ export default function handler(
         return res.status(400).json({ error: 'Invalid cron pattern' });
       }
       
-      const newJob = addScheduledJob(name, cronPattern, enabled);
+      const newJob = await addScheduledJob(name, cronPattern, enabled);
       
       // Start the job if it's enabled
       if (enabled) {
