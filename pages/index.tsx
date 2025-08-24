@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 
 interface FeedItem {
@@ -32,24 +32,7 @@ export default function HomePage() {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
-  useEffect(() => {
-    fetchData();
-    
-    // Auto-refresh every 30 seconds to show new quizzes and feed items
-    const interval = setInterval(() => {
-      Promise.all([
-        fetch('/api/feed-items').then(res => res.ok ? res.json() : []),
-        fetch('/api/created-quizzes').then(res => res.ok ? res.json() : [])
-      ]).then(([items, quizzes]) => {
-        setFeedItems(items);
-        setCreatedQuizzes(quizzes);
-      }).catch(() => {}); // Silent fail
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [itemsRes, quizzesRes] = await Promise.all([
         fetch('/api/feed-items'),
@@ -68,7 +51,18 @@ export default function HomePage() {
     } catch (error) {
       showMessage('error', 'Fel vid laddning av data');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    // Auto-refresh every 30 seconds to show new quizzes and feed items
+    const interval = setInterval(() => {
+      fetchData();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
@@ -92,7 +86,7 @@ export default function HomePage() {
 
       if (response.ok) {
         const result = await response.json();
-        showMessage('success', `🎯 Quiz request sent for: ${result.title}. Your quiz is being created!`);
+        showMessage('success', `🎯 Sajten är skickad: ${result.title}. Ditt quiz skapas nu automatiskt med Workflows!`);
         setCustomTitle('');
         // Force immediate refresh of feed items to show the new trigger
         setTimeout(() => {
@@ -157,8 +151,10 @@ export default function HomePage() {
                   required
                   className="field-input"
                 />
-                <p className="field-hint">Quizet kommer skapas när Workflowet körs, det kan ta några minuter</p>
+                <p className="field-hint">Quizet kommer skapas när <a href="https://workflows-lab-iap.bnu.bn.nr/workflows/f01b5594-9907-470e-8bb3-2f269c8a6d87">det här Workflowet </a>
+  körs, det kan ta några minuter</p>
               </div>
+
               
               <button type="submit" disabled={isLoading || !customTitle.trim()} className="btn-primary submit-btn">
                 {isLoading ? (
