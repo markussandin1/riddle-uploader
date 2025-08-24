@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
 import type { AppProps } from 'next/app';
+import '../styles/globals.css';
+import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
@@ -16,5 +19,10 @@ export default function App({ Component, pageProps }: AppProps) {
     initScheduler();
   }, []);
 
-  return <Component {...pageProps} />;
+  return (
+    <ThemeProvider>
+      <Component {...pageProps} />
+      <ThemeToggle />
+    </ThemeProvider>
+  );
 }
