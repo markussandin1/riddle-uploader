@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { loadFeedItems } from '../../lib/memory-store';
+import { loadFeedItems } from '../../lib/kv-store';
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -10,7 +10,7 @@ export default function handler(
   }
 
   try {
-    const feedItems = loadFeedItems();
+    const feedItems = await loadFeedItems();
     return res.status(200).json(feedItems);
   } catch (error) {
     console.error('Error loading feed items:', error);

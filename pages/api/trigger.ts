@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { addFeedItem } from '../../lib/memory-store';
+import { addFeedItem } from '../../lib/kv-store';
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -12,7 +12,7 @@ export default function handler(
   try {
     const { title, description } = req.body;
     
-    const newItem = addFeedItem(title, description);
+    const newItem = await addFeedItem(title, description);
     
     return res.status(201).json({
       message: 'RSS trigger created successfully',

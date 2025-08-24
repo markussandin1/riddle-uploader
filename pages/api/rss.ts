@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { loadFeedItems } from '../../lib/memory-store';
+import { loadFeedItems } from '../../lib/kv-store';
 import { generateRSSFeed } from '../../lib/rss-generator';
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -11,7 +11,7 @@ export default function handler(
   }
 
   try {
-    const feedItems = loadFeedItems();
+    const feedItems = await loadFeedItems();
     const rssContent = generateRSSFeed(feedItems, 'RSS Trigger Feed');
     
     res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
