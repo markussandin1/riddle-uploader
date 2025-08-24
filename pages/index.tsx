@@ -538,15 +538,18 @@ export default function HomePage() {
 
           .quiz-grid {
             display: grid;
-            gap: var(--space-6);
+            gap: var(--space-4);
             grid-template-columns: 1fr;
+            max-height: 500px;
+            overflow-y: auto;
+            padding-right: var(--space-2);
           }
 
           .quiz-card {
             background: linear-gradient(135deg, var(--success-50), var(--success-25));
             border: 1px solid var(--success-200);
             border-radius: var(--radius-lg);
-            padding: var(--space-6);
+            padding: var(--space-4);
             transition: all var(--transition-normal);
             border-left: 4px solid var(--success-500);
           }
@@ -570,7 +573,7 @@ export default function HomePage() {
 
           .quiz-title {
             color: var(--success-900);
-            font-size: var(--text-lg);
+            font-size: var(--text-base);
             font-weight: var(--font-semibold);
             margin: 0;
             line-height: var(--leading-tight);
@@ -816,9 +819,6 @@ export default function HomePage() {
           }
 
           @media (min-width: 1024px) {
-            .quiz-grid {
-              grid-template-columns: repeat(2, 1fr);
-            }
           }
 
           @media (max-width: 768px) {
