@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { loadFeedItems } from '../../lib/kv-store';
+import { loadFeedItems } from '../../lib/edge-config-store';
 
 export default async function handler(
   req: NextApiRequest,
