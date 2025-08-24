@@ -1,6 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
-import path from 'path';
 
 export interface FeedItem {
   id: string;
@@ -20,64 +18,37 @@ export interface ScheduledJob {
   nextRun?: Date;
 }
 
-// Use /tmp directory for simple persistence in serverless
-const TMP_DIR = '/tmp';
-const FEED_ITEMS_FILE = path.join(TMP_DIR, 'feed-items.json');
-const SCHEDULED_JOBS_FILE = path.join(TMP_DIR, 'scheduled-jobs.json');
+// Global in-memory storage - survives across API calls in same serverless function instance
+let globalFeedItems: FeedItem[] = [];
+let globalScheduledJobs: ScheduledJob[] = [];
 
-// Simple file-based storage using /tmp (temporary but shared across function invocations)
-const loadFeedItemsFromFile = (): FeedItem[] => {
-  try {
-    if (fs.existsSync(FEED_ITEMS_FILE)) {
-      const data = fs.readFileSync(FEED_ITEMS_FILE, 'utf8');
-      const items = JSON.parse(data);
-      // Convert date strings back to Date objects
-      return items.map((item: any) => ({
-        ...item,
-        pubDate: new Date(item.pubDate)
-      }));
-    }
-  } catch (error) {
-    console.error('Error loading feed items from /tmp:', error);
-  }
-  return [];
+// Keep data alive for 10 minutes to handle production serverless function reuse
+let lastActivity = Date.now();
+const DATA_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
+const isDataFresh = () => {
+  return (Date.now() - lastActivity) < DATA_TIMEOUT;
 };
 
-const saveFeedItemsToFile = (items: FeedItem[]) => {
-  try {
-    fs.writeFileSync(FEED_ITEMS_FILE, JSON.stringify(items, null, 2));
-  } catch (error) {
-    console.error('Error saving feed items to /tmp:', error);
-  }
-};
-
-const loadScheduledJobsFromFile = (): ScheduledJob[] => {
-  try {
-    if (fs.existsSync(SCHEDULED_JOBS_FILE)) {
-      const data = fs.readFileSync(SCHEDULED_JOBS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Error loading scheduled jobs from /tmp:', error);
-  }
-  return [];
-};
-
-const saveScheduledJobsToFile = (jobs: ScheduledJob[]) => {
-  try {
-    fs.writeFileSync(SCHEDULED_JOBS_FILE, JSON.stringify(jobs, null, 2));
-  } catch (error) {
-    console.error('Error saving scheduled jobs to /tmp:', error);
-  }
+const updateActivity = () => {
+  lastActivity = Date.now();
 };
 
 export const loadFeedItems = (): FeedItem[] => {
-  const items = loadFeedItemsFromFile();
+  updateActivity();
+  
+  // Clear old data if timeout exceeded
+  if (!isDataFresh()) {
+    globalFeedItems = [];
+  }
+  
   // Return items sorted by date (newest first)
-  return items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  return [...globalFeedItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 };
 
 export const addFeedItem = (title?: string, description?: string): FeedItem => {
+  updateActivity();
+  
   const newItem: FeedItem = {
     id: uuidv4(),
     title: title || `RSS Trigger ${new Date().toLocaleString('sv-SE')}`,
@@ -87,21 +58,35 @@ export const addFeedItem = (title?: string, description?: string): FeedItem => {
     guid: uuidv4()
   };
   
-  const items = loadFeedItemsFromFile();
-  items.unshift(newItem); // Add to beginning
+  // Clear old data if timeout exceeded
+  if (!isDataFresh()) {
+    globalFeedItems = [];
+  }
+  
+  globalFeedItems.unshift(newItem); // Add to beginning
   
   // Keep only last 50 items
-  const limitedItems = items.slice(0, 50);
-  saveFeedItemsToFile(limitedItems);
+  if (globalFeedItems.length > 50) {
+    globalFeedItems = globalFeedItems.slice(0, 50);
+  }
   
   return newItem;
 };
 
 export const loadScheduledJobs = (): ScheduledJob[] => {
-  return loadScheduledJobsFromFile();
+  updateActivity();
+  
+  // Clear old data if timeout exceeded  
+  if (!isDataFresh()) {
+    globalScheduledJobs = [];
+  }
+  
+  return [...globalScheduledJobs];
 };
 
 export const addScheduledJob = (name: string, cronPattern: string, enabled: boolean = true): ScheduledJob => {
+  updateActivity();
+  
   const newJob: ScheduledJob = {
     id: uuidv4(),
     name,
@@ -109,20 +94,27 @@ export const addScheduledJob = (name: string, cronPattern: string, enabled: bool
     enabled
   };
   
-  const jobs = loadScheduledJobsFromFile();
-  jobs.push(newJob);
-  saveScheduledJobsToFile(jobs);
+  // Clear old data if timeout exceeded
+  if (!isDataFresh()) {
+    globalScheduledJobs = [];
+  }
   
+  globalScheduledJobs.push(newJob);
   return newJob;
 };
 
 export const updateScheduledJob = (id: string, updates: Partial<ScheduledJob>): boolean => {
-  const jobs = loadScheduledJobsFromFile();
-  const index = jobs.findIndex(job => job.id === id);
+  updateActivity();
+  
+  // Clear old data if timeout exceeded
+  if (!isDataFresh()) {
+    globalScheduledJobs = [];
+  }
+  
+  const index = globalScheduledJobs.findIndex(job => job.id === id);
   
   if (index !== -1) {
-    jobs[index] = { ...jobs[index], ...updates };
-    saveScheduledJobsToFile(jobs);
+    globalScheduledJobs[index] = { ...globalScheduledJobs[index], ...updates };
     return true;
   }
   
@@ -130,12 +122,17 @@ export const updateScheduledJob = (id: string, updates: Partial<ScheduledJob>): 
 };
 
 export const deleteScheduledJob = (id: string): boolean => {
-  const jobs = loadScheduledJobsFromFile();
-  const index = jobs.findIndex(job => job.id === id);
+  updateActivity();
+  
+  // Clear old data if timeout exceeded
+  if (!isDataFresh()) {
+    globalScheduledJobs = [];
+  }
+  
+  const index = globalScheduledJobs.findIndex(job => job.id === id);
   
   if (index !== -1) {
-    jobs.splice(index, 1);
-    saveScheduledJobsToFile(jobs);
+    globalScheduledJobs.splice(index, 1);
     return true;
   }
   
