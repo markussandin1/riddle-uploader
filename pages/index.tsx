@@ -9,321 +9,234 @@ interface FeedItem {
   guid: string;
 }
 
-interface ScheduledJob {
+interface CreatedQuiz {
   id: string;
-  name: string;
-  cronPattern: string;
-  enabled: boolean;
-  lastRun?: string;
+  uuid: string;
+  title: string;
+  viewUrl: string | null;
+  created: string;
+  published: boolean;
+  publishedAt: string | null;
+  sourceRequest?: string;
+  timestamp: string;
 }
 
-export default function Home() {
-  const [activeTab, setActiveTab] = useState<'quiz' | 'rss'>('quiz');
-  const [jsonInput, setJsonInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string; data?: any } | null>(null);
-  
-  // RSS states
+export default function HomePage() {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
-  const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
-  const [isRssLoading, setIsRssLoading] = useState(false);
-  const [rssMessage, setRssMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [createdQuizzes, setCreatedQuizzes] = useState<CreatedQuiz[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
-  // RSS form states
+  // Form states
   const [customTitle, setCustomTitle] = useState('');
-  const [customDescription, setCustomDescription] = useState('');
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
   useEffect(() => {
-    if (activeTab === 'rss') {
-      fetchRssData();
-    }
-  }, [activeTab]);
+    fetchData();
+    
+    // Auto-refresh every 30 seconds to show new quizzes
+    const interval = setInterval(() => {
+      fetch('/api/created-quizzes')
+        .then(res => res.ok ? res.json() : [])
+        .then(quizzes => setCreatedQuizzes(quizzes))
+        .catch(() => {}); // Silent fail
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
-  const fetchRssData = async () => {
+  const fetchData = async () => {
     try {
-      const itemsRes = await fetch('/api/feed-items');
+      const [itemsRes, quizzesRes] = await Promise.all([
+        fetch('/api/feed-items'),
+        fetch('/api/created-quizzes')
+      ]);
       
       if (itemsRes.ok) {
         const items = await itemsRes.json();
         setFeedItems(items);
       }
+      
+      if (quizzesRes.ok) {
+        const quizzes = await quizzesRes.json();
+        setCreatedQuizzes(quizzes);
+      }
     } catch (error) {
-      showRssMessage('error', 'Fel vid laddning av data');
+      showMessage('error', 'Fel vid laddning av data');
     }
   };
 
-  const showRssMessage = (type: 'success' | 'error', text: string) => {
-    setRssMessage({ type, text });
-    setTimeout(() => setRssMessage(null), 5000);
+  const showMessage = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 5000);
   };
 
   const triggerManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsRssLoading(true);
+    if (!customTitle.trim()) return;
+    
+    setIsLoading(true);
 
     try {
       const response = await fetch('/api/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: customTitle || undefined,
-          description: customDescription || undefined
+          title: customTitle
         })
       });
 
       if (response.ok) {
         const result = await response.json();
-        showRssMessage('success', `RSS trigger skapad: ${result.title}`);
+        showMessage('success', `🎯 Quiz-förfrågan skickad för: ${result.title}. AI:n arbetar nu med att skapa ditt quiz!`);
         setCustomTitle('');
-        setCustomDescription('');
-        fetchRssData();
+        fetchData();
       } else {
-        showRssMessage('error', 'Fel vid skapande av trigger');
+        showMessage('error', 'Fel vid skapande av quiz-förfrågan');
       }
     } catch (error) {
-      showRssMessage('error', 'Nätverksfel');
-    } finally {
-      setIsRssLoading(false);
-    }
-  };
-
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        setJsonInput(content);
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setResult(null);
-
-    try {
-      const response = await fetch('/api/upload-quiz', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ quizData: jsonInput }),
-      });
-
-      const data = await response.json();
-      setResult(data);
-    } catch (error) {
-      setResult({
-        success: false,
-        message: 'Fel vid uppkoppling: ' + (error as Error).message,
-      });
+      showMessage('error', 'Nätverksfel');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const clearAll = () => {
-    setJsonInput('');
-    setResult(null);
-  };
-
   return (
     <>
       <Head>
-        <title>{activeTab === 'quiz' ? 'Riddle Quiz Uploader' : 'RSS Trigger Generator'}</title>
-        <meta name="description" content="Upload quiz JSON to Riddle" />
+        <title>Skapa Quiz</title>
+        <meta name="description" content="Skapa automatiska quiz baserat på populära artiklar från nyhetssajter" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
       </Head>
+
       <main className="container">
         <div className="header">
-          <div className="tab-buttons">
-            <button 
-              className={`tab-button ${activeTab === 'quiz' ? 'active' : ''}`}
-              onClick={() => setActiveTab('quiz')}
-            >
-              🧩 Quiz Uploader
-            </button>
-            <button 
-              className={`tab-button ${activeTab === 'rss' ? 'active' : ''}`}
-              onClick={() => setActiveTab('rss')}
-            >
-              📡 RSS Triggers
-            </button>
-          </div>
+          <h1>🎯 Skapa Quiz</h1>
+          <p>Skriv in vilken sajt du vill skapa ett quiz för</p>
           
-          {activeTab === 'quiz' ? (
-            <div>
-              <h1>🧩 Riddle Quiz Uploader</h1>
-              <p>Ladda upp eller klistra in din quiz JSON för att posta till Riddle</p>
-            </div>
-          ) : (
-            <div>
-              <h1>📡 RSS Trigger Generator</h1>
-              <p>Skapa RSS-triggers manuellt för att trigga dina AI-workflows</p>
-              
-              <div className="rss-link">
-                <strong>RSS Feed URL:</strong>
-                <code>{baseUrl}/api/rss</code>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(`${baseUrl}/api/rss`)}
-                  className="copy-btn"
-                >
-                  📋 Kopiera
-                </button>
-              </div>
-              
-              <div className="navigation-links">
-                <a href="/rss-triggers" className="nav-link">
-                  ⚙️ Avancerade RSS funktioner (schemaläggning)
-                </a>
-              </div>
-            </div>
-          )}
+          <div className="info-box">
+            <p>🤖 AI-systemet analyserar automatiskt de populäraste artiklarna från sajten och skapar ett anpassat nyhetsquiz</p>
+          </div>
         </div>
 
-        {activeTab === 'quiz' ? (
-        <form onSubmit={handleSubmit} className="form">
-          <div className="input-section">
-            <h2>1. Ladda upp fil eller klistra in JSON</h2>
-            
-            <div className="file-upload">
-              <label htmlFor="file-input" className="file-label">
-                📁 Välj JSON-fil
-              </label>
-              <input
-                id="file-input"
-                type="file"
-                accept=".json"
-                onChange={handleFileUpload}
-                className="file-input"
-              />
-            </div>
-
-            <div className="text-input">
-              <label htmlFor="json-textarea">Eller klistra in JSON här:</label>
-              <textarea
-                id="json-textarea"
-                value={jsonInput}
-                onChange={(e) => setJsonInput(e.target.value)}
-                placeholder='{\n  "type": "Quiz",\n  "publish": true,\n  "build": {\n    "title": "Mitt Quiz",\n    ...\n  }\n}'
-                rows={15}
-                className="json-textarea"
-              />
-            </div>
+        {message && (
+          <div className={`message ${message.type}`}>
+            {message.text}
           </div>
+        )}
 
-          <div className="button-section">
-            <button
-              type="submit"
-              disabled={!jsonInput.trim() || isLoading}
-              className="submit-button"
-            >
-              {isLoading ? '⏳ Laddar upp...' : '🚀 Posta till Riddle'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={clearAll}
-              className="clear-button"
-            >
-              🗑️ Rensa
-            </button>
-          </div>
-        </form>
-        ) : (
-        <div className="rss-content">
-          {rssMessage && (
-            <div className={`message ${rssMessage.type}`}>
-              {rssMessage.text}
+        <div className="sections">
+          {/* Quiz Creation */}
+          <section className="card main-card">
+            <h2>📝 Skapa Quiz</h2>
+            <form onSubmit={triggerManual} className="form">
+              <div className="form-group">
+                <label htmlFor="title">Vilken nyhetssajt vill du skapa quiz för?</label>
+                <input
+                  id="title"
+                  type="text"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="t.ex. gd.se, Gävle Dagblad, svt.se, dn.se"
+                  required
+                />
+                <small>Ange domännamn eller sajttitel</small>
+              </div>
+              
+              <button type="submit" disabled={isLoading || !customTitle.trim()} className="btn-primary">
+                {isLoading ? '⏳ AI skapar quiz...' : '🎯 Skapa Quiz Nu'}
+              </button>
+            </form>
+          </section>
+
+          {/* Created Quizzes */}
+          <section className="card quiz-results">
+            <div className="section-header">
+              <h2>🎯 Färdiga Quiz</h2>
+              <button 
+                onClick={() => fetch('/api/created-quizzes').then(res => res.json()).then(setCreatedQuizzes).catch(() => {})}
+                className="refresh-btn"
+              >
+                🔄 Uppdatera
+              </button>
             </div>
-          )}
-
-          <div className="sections">
-            {/* Manual Trigger */}
-            <section className="card">
-              <h2>🔥 Manuell Trigger</h2>
-              <form onSubmit={triggerManual} className="rss-form">
-                <div className="form-group">
-                  <label htmlFor="title">Sajt att skapa quiz för:</label>
-                  <input
-                    id="title"
-                    type="text"
-                    value={customTitle}
-                    onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="t.ex. www.example.com eller Example Company"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="description">Beskrivning (valfri):</label>
-                  <textarea
-                    id="description"
-                    value={customDescription}
-                    onChange={(e) => setCustomDescription(e.target.value)}
-                    placeholder="t.ex. Skapa quiz om företagets produkter eller tjänster"
-                    rows={3}
-                  />
-                </div>
-                
-                <button type="submit" disabled={isRssLoading} className="btn-primary">
-                  {isRssLoading ? '⏳ Skapar...' : '🚀 Trigga Nu'}
-                </button>
-              </form>
-            </section>
-
-
-            {/* Recent Triggers */}
-            <section className="card">
-              <h2>📋 Senaste Triggers</h2>
-              {feedItems.length > 0 ? (
-                <div className="feed-items">
-                  {feedItems.slice(0, 10).map(item => (
-                    <div key={item.id} className="feed-item">
-                      <div className="feed-title">{item.title}</div>
-                      <div className="feed-description">{item.description}</div>
-                      <div className="feed-date">{new Date(item.pubDate).toLocaleString('sv-SE')}</div>
+            {createdQuizzes.length > 0 ? (
+              <div className="quiz-items">
+                {createdQuizzes.slice(0, 10).map(quiz => (
+                  <div key={quiz.id} className="quiz-item">
+                    <div className="quiz-info">
+                      <div className="quiz-title">
+                        <strong>{quiz.title}</strong>
+                        <span className={`status ${quiz.published ? 'published' : 'draft'}`}>
+                          {quiz.published ? '✅ Publicerat' : '📝 Utkast'}
+                        </span>
+                      </div>
+                      <div className="quiz-meta">
+                        <span className="quiz-date">
+                          Skapad: {new Date(quiz.timestamp).toLocaleString('sv-SE')}
+                        </span>
+                        {quiz.uuid && (
+                          <span className="quiz-id">ID: {quiz.uuid.slice(0, 8)}...</span>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-state">Inga triggers skapade än. Tryck på "Trigga Nu" för att skapa din första!</p>
-              )}
-            </section>
-          </div>
-        </div>
-        )}
-
-        {result && activeTab === 'quiz' && (
-          <div className={`result ${result.success ? 'success' : 'error'}`}>
-            <h3>{result.success ? '✅ Framgång!' : '❌ Fel'}</h3>
-            <p>{result.message}</p>
-            {result.success && result.data && (
-              <div className="quiz-info">
-                <p><strong>Quiz UUID:</strong> {result.data.UUID}</p>
-                <p><strong>Titel:</strong> {result.data.title}</p>
-                <p><strong>Skapad:</strong> {result.data.created?.at}</p>
-                <p><strong>Status:</strong> {result.data.published ? 'Publicerad' : 'Draft'}</p>
-                {result.data.published && (
-                  <a 
-                    href={`https://www.riddle.com/view/${result.data.UUID}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="view-link"
-                  >
-                    🔗 Visa Quiz
-                  </a>
-                )}
+                    <div className="quiz-actions">
+                      {quiz.viewUrl ? (
+                        <a 
+                          href={quiz.viewUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="btn-quiz-link"
+                        >
+                          🚀 Visa Quiz
+                        </a>
+                      ) : (
+                        <span className="btn-disabled">Ej tillgänglig</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="empty-state">Inga quiz skapade än. När AI:n skapar ett quiz från dina förfrågningar visas det här!</p>
             )}
-          </div>
-        )}
+          </section>
+
+          {/* Recent Requests */}
+          <section className="card">
+            <h2>📋 Senaste Quiz-förfrågningar</h2>
+            {feedItems.length > 0 ? (
+              <div className="feed-items">
+                {feedItems.slice(0, 5).map(item => (
+                  <div key={item.id} className="feed-item">
+                    <div className="feed-title">🎯 Quiz för: {item.title}</div>
+                    <div className="feed-date">Skickat: {new Date(item.pubDate).toLocaleString('sv-SE')}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">Inga quiz-förfrågningar än. Tryck på "Skapa Quiz Nu" för att komma igång!</p>
+            )}
+          </section>
+        </div>
+
+        {/* RSS Feed Info - moved to bottom */}
+        <div className="technical-info">
+          <details>
+            <summary>🔧 Teknisk information</summary>
+            <div className="tech-content">
+              <p><strong>RSS Feed URL för workflows:</strong></p>
+              <code>{baseUrl}/api/rss</code>
+              <button 
+                onClick={() => navigator.clipboard.writeText(`${baseUrl}/api/rss`)}
+                className="copy-btn"
+              >
+                📋 Kopiera
+              </button>
+            </div>
+          </details>
+        </div>
 
         <style jsx>{`
           .container {
@@ -333,91 +246,45 @@ export default function Home() {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
           }
 
-          .tab-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            justify-content: center;
+          .header {
+            text-align: center;
+            margin-bottom: 40px;
           }
 
-          .tab-button {
-            padding: 12px 24px;
-            border: 2px solid #007bff;
-            background: white;
-            color: #007bff;
-            border-radius: 6px;
-            cursor: pointer;
+          .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+          }
+
+          .header p {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 20px;
+          }
+
+          .info-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+          }
+
+          .info-box p {
+            margin: 0;
+            font-size: 16px;
             font-weight: 500;
-            transition: all 0.2s;
-          }
-
-          .tab-button.active {
-            background: #007bff;
-            color: white;
-          }
-
-          .tab-button:hover {
-            background: #007bff;
-            color: white;
-          }
-
-          .rss-link {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-            margin-top: 20px;
-          }
-
-          .rss-link code {
-            background: #fff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin: 0 10px;
-            font-family: 'Monaco', monospace;
-            border: 1px solid #ddd;
-          }
-
-          .copy-btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-          }
-
-          .copy-btn:hover {
-            background: #0056b3;
-          }
-
-          .navigation-links {
-            margin-top: 15px;
-          }
-
-          .nav-link {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #f8f9fa;
-            color: #007bff;
-            text-decoration: none;
-            border-radius: 6px;
-            border: 1px solid #dee2e6;
-            font-size: 14px;
-            transition: all 0.2s;
-          }
-
-          .nav-link:hover {
-            background: #007bff;
-            color: white;
-            text-decoration: none;
           }
 
           .sections {
             display: grid;
             gap: 30px;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: 1fr;
+            max-width: 800px;
+            margin: 0 auto;
           }
 
           .card {
@@ -428,141 +295,189 @@ export default function Home() {
             border: 1px solid #e9ecef;
           }
 
+          .main-card {
+            border: 3px solid #007bff;
+            background: linear-gradient(135deg, #f8f9ff, #ffffff);
+          }
+
           .card h2 {
             margin-bottom: 20px;
             color: #333;
           }
 
-          .rss-form {
+          .form {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
           }
 
           .form-group {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 8px;
           }
 
           .form-group label {
-            font-weight: 500;
+            font-weight: 600;
             color: #333;
+            font-size: 16px;
           }
 
-          .form-group input,
-          .form-group textarea {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
+          .form-group input {
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+          }
+
+          .form-group input:focus {
+            outline: none;
+            border-color: #007bff;
           }
 
           .form-group small {
             color: #666;
-            font-size: 12px;
-          }
-
-          .btn-primary, .btn-secondary, .btn-toggle, .btn-delete {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
+            font-size: 14px;
           }
 
           .btn-primary {
-            background: #28a745;
+            padding: 18px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 18px;
+            transition: all 0.2s;
+            background: #007bff;
             color: white;
           }
 
           .btn-primary:hover:not(:disabled) {
-            background: #218838;
+            background: #0056b3;
+            transform: translateY(-2px);
           }
 
           .btn-primary:disabled {
             background: #6c757d;
             cursor: not-allowed;
+            transform: none;
           }
 
-          .btn-secondary {
-            background: #007bff;
-            color: white;
+          .quiz-results {
+            border: 2px solid #28a745;
           }
 
-          .btn-secondary:hover {
-            background: #0056b3;
-          }
-
-          .jobs-list {
-            margin-top: 20px;
-          }
-
-          .jobs-list h3 {
-            margin-bottom: 15px;
-            color: #333;
-          }
-
-          .job-item {
+          .section-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
           }
 
-          .job-info {
+          .quiz-results h2 {
+            color: #28a745;
+            margin: 0;
+          }
+
+          .refresh-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+          }
+
+          .refresh-btn:hover {
+            background: #138496;
+          }
+
+          .quiz-items {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 15px;
           }
 
-          .cron-pattern {
-            font-family: 'Monaco', monospace;
-            background: #fff;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 12px;
-            border: 1px solid #ddd;
-          }
-
-          .last-run {
-            font-size: 12px;
-            color: #666;
-          }
-
-          .job-actions {
+          .quiz-item {
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #d4edda, #e8f5e8);
+            border-radius: 12px;
+            border-left: 4px solid #28a745;
           }
 
-          .btn-toggle {
-            padding: 6px 12px;
+          .quiz-info {
+            flex: 1;
+          }
+
+          .quiz-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 8px;
+          }
+
+          .quiz-title strong {
+            color: #155724;
+            font-size: 16px;
+          }
+
+          .status {
+            padding: 4px 8px;
+            border-radius: 12px;
             font-size: 12px;
+            font-weight: 500;
           }
 
-          .btn-toggle.enabled {
+          .status.published {
+            background: #28a745;
+            color: white;
+          }
+
+          .status.draft {
             background: #ffc107;
             color: #212529;
           }
 
-          .btn-toggle.disabled {
+          .quiz-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: #6c757d;
+          }
+
+          .quiz-actions {
+            margin-left: 20px;
+          }
+
+          .btn-quiz-link {
+            background: #007bff;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-block;
+          }
+
+          .btn-quiz-link:hover {
+            background: #0056b3;
+            text-decoration: none;
+            color: white;
+          }
+
+          .btn-disabled {
             background: #6c757d;
             color: white;
-          }
-
-          .btn-delete {
-            background: #dc3545;
-            color: white;
-            padding: 6px 10px;
-            font-size: 12px;
-          }
-
-          .btn-delete:hover {
-            background: #c82333;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
           }
 
           .feed-items {
@@ -584,12 +499,6 @@ export default function Home() {
             margin-bottom: 5px;
           }
 
-          .feed-description {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 5px;
-          }
-
           .feed-date {
             color: #999;
             font-size: 12px;
@@ -607,6 +516,10 @@ export default function Home() {
             border-radius: 8px;
             margin-bottom: 20px;
             border-left: 4px solid;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 20px;
           }
 
           .message.success {
@@ -621,169 +534,54 @@ export default function Home() {
             border-color: #dc3545;
           }
 
-          .header {
-            text-align: center;
-            margin-bottom: 40px;
+          .technical-info {
+            margin-top: 60px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
           }
 
-          .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-
-          .header p {
-            color: #666;
-            font-size: 16px;
-          }
-
-          .form {
-            background: #f9f9f9;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          }
-
-          .input-section h2 {
-            margin-bottom: 20px;
-            color: #333;
-            font-size: 18px;
-          }
-
-          .file-upload {
-            margin-bottom: 20px;
-          }
-
-          .file-label {
-            display: inline-block;
-            padding: 12px 20px;
-            background: #007bff;
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-          }
-
-          .file-label:hover {
-            background: #0056b3;
-          }
-
-          .file-input {
-            display: none;
-          }
-
-          .text-input {
-            margin-bottom: 30px;
-          }
-
-          .text-input label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #333;
-          }
-
-          .json-textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            resize: vertical;
-            transition: border-color 0.2s;
-          }
-
-          .json-textarea:focus {
-            outline: none;
-            border-color: #007bff;
-          }
-
-          .button-section {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-          }
-
-          .submit-button, .clear-button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-weight: 500;
-          }
-
-          .submit-button {
-            background: #28a745;
-            color: white;
-          }
-
-          .submit-button:hover:not(:disabled) {
-            background: #218838;
-          }
-
-          .submit-button:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-          }
-
-          .clear-button {
-            background: #6c757d;
-            color: white;
-          }
-
-          .clear-button:hover {
-            background: #5a6268;
-          }
-
-          .result {
-            margin-top: 30px;
+          .technical-info details {
+            background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid;
+            border: 1px solid #e9ecef;
           }
 
-          .result.success {
-            background: #d4edda;
-            border-color: #28a745;
-            color: #155724;
+          .technical-info summary {
+            font-weight: 500;
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
           }
 
-          .result.error {
-            background: #f8d7da;
-            border-color: #dc3545;
-            color: #721c24;
-          }
-
-          .result h3 {
-            margin-top: 0;
-            margin-bottom: 10px;
-          }
-
-          .quiz-info {
+          .tech-content {
             margin-top: 15px;
-            padding: 15px;
-            background: rgba(255,255,255,0.5);
-            border-radius: 6px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
           }
 
-          .quiz-info p {
-            margin: 5px 0;
-          }
-
-          .view-link {
+          .tech-content code {
+            background: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 0 10px;
+            font-family: 'Monaco', monospace;
+            border: 1px solid #ddd;
             display: inline-block;
-            margin-top: 10px;
-            padding: 8px 16px;
+          }
+
+          .copy-btn {
             background: #007bff;
             color: white;
-            text-decoration: none;
+            border: none;
+            padding: 6px 12px;
             border-radius: 4px;
-            transition: background-color 0.2s;
+            cursor: pointer;
+            font-size: 12px;
           }
 
-          .view-link:hover {
+          .copy-btn:hover {
             background: #0056b3;
           }
 
@@ -792,22 +590,24 @@ export default function Home() {
               padding: 15px;
             }
             
-            .sections {
-              grid-template-columns: 1fr;
+            .header h1 {
+              font-size: 2em;
             }
             
-            .tab-buttons {
-              flex-direction: column;
-            }
-            
-            .button-section {
-              flex-direction: column;
-            }
-            
-            .job-item {
+            .quiz-item {
               flex-direction: column;
               align-items: flex-start;
-              gap: 10px;
+              gap: 15px;
+            }
+
+            .quiz-actions {
+              margin-left: 0;
+              width: 100%;
+            }
+
+            .btn-quiz-link {
+              width: 100%;
+              text-align: center;
             }
           }
         `}</style>

@@ -17,9 +17,22 @@ interface ScheduledJob {
   lastRun?: string;
 }
 
+interface CreatedQuiz {
+  id: string;
+  uuid: string;
+  title: string;
+  viewUrl: string | null;
+  created: string;
+  published: boolean;
+  publishedAt: string | null;
+  sourceRequest?: string;
+  timestamp: string;
+}
+
 export default function RSSTriggersPage() {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
+  const [createdQuizzes, setCreatedQuizzes] = useState<CreatedQuiz[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
@@ -33,13 +46,24 @@ export default function RSSTriggersPage() {
 
   useEffect(() => {
     fetchData();
+    
+    // Auto-refresh every 30 seconds to show new quizzes
+    const interval = setInterval(() => {
+      fetch('/api/created-quizzes')
+        .then(res => res.ok ? res.json() : [])
+        .then(quizzes => setCreatedQuizzes(quizzes))
+        .catch(() => {}); // Silent fail
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     try {
-      const [itemsRes, jobsRes] = await Promise.all([
+      const [itemsRes, jobsRes, quizzesRes] = await Promise.all([
         fetch('/api/feed-items'),
-        fetch('/api/scheduled-jobs')
+        fetch('/api/scheduled-jobs'),
+        fetch('/api/created-quizzes')
       ]);
       
       if (itemsRes.ok) {
@@ -50,6 +74,11 @@ export default function RSSTriggersPage() {
       if (jobsRes.ok) {
         const jobs = await jobsRes.json();
         setScheduledJobs(jobs);
+      }
+      
+      if (quizzesRes.ok) {
+        const quizzes = await quizzesRes.json();
+        setCreatedQuizzes(quizzes);
       }
     } catch (error) {
       showMessage('error', 'Fel vid laddning av data');
@@ -77,12 +106,12 @@ export default function RSSTriggersPage() {
 
       if (response.ok) {
         const result = await response.json();
-        showMessage('success', `RSS trigger skapad: ${result.title}`);
+        showMessage('success', `🎯 Quiz-förfrågan skickad för: ${result.title}. AI:n arbetar nu med att skapa ditt quiz!`);
         setCustomTitle('');
         setCustomDescription('');
         fetchData();
       } else {
-        showMessage('error', 'Fel vid skapande av trigger');
+        showMessage('error', 'Fel vid skapande av quiz-förfrågan');
       }
     } catch (error) {
       showMessage('error', 'Nätverksfel');
@@ -160,25 +189,19 @@ export default function RSSTriggersPage() {
   return (
     <>
       <Head>
-        <title>RSS Trigger Generator</title>
-        <meta name="description" content="Trigger RSS feed updates manually or on schedule" />
+        <title>Quiz Generator för Nyhetssajter</title>
+        <meta name="description" content="Skapa automatiska quiz baserat på populära artiklar från nyhetssajter" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <main className="container">
         <div className="header">
-          <h1>📡 RSS Trigger Generator</h1>
-          <p>Skapa RSS-triggers manuellt eller schemalagt för att trigga dina AI-workflows</p>
+          <h1>🎯 Quiz Generator för Nyhetssajter</h1>
+          <p>Skapa automatiska quiz baserat på de mest lästa artiklarna från svenska nyhetssajter</p>
           
-          <div className="rss-link">
-            <strong>RSS Feed URL:</strong>
-            <code>{baseUrl}/api/rss</code>
-            <button 
-              onClick={() => navigator.clipboard.writeText(`${baseUrl}/api/rss`)}
-              className="copy-btn"
-            >
-              📋 Kopiera
-            </button>
+          <div className="info-box">
+            <p>🤖 AI-systemet analyserar automatiskt de populäraste artiklarna från sajten och skapar ett anpassat nyhetsquiz</p>
+            <small>Teknisk info: RSS Feed URL för workflows: <code>{baseUrl}/api/rss</code></small>
           </div>
         </div>
 
@@ -189,78 +212,79 @@ export default function RSSTriggersPage() {
         )}
 
         <div className="sections">
-          {/* Manual Trigger */}
+          {/* Manual Quiz Creation */}
           <section className="card">
-            <h2>🔥 Manuell Trigger</h2>
+            <h2>📝 Skapa Quiz</h2>
             <form onSubmit={triggerManual} className="form">
               <div className="form-group">
-                <label htmlFor="title">Sajt att skapa quiz för:</label>
+                <label htmlFor="title">Vilken nyhetssajt vill du skapa quiz för?</label>
                 <input
                   id="title"
                   type="text"
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
-                  placeholder="t.ex. www.example.com eller Example Company"
+                  placeholder="t.ex. dn.se, svt.se, aftonbladet.se"
                 />
+                <small>Ange domännamn eller sajttitel</small>
               </div>
               
               <div className="form-group">
-                <label htmlFor="description">Beskrivning (valfri):</label>
+                <label htmlFor="description">Särskilda önskemål (valfri):</label>
                 <textarea
                   id="description"
                   value={customDescription}
                   onChange={(e) => setCustomDescription(e.target.value)}
-                  placeholder="t.ex. Skapa quiz om företagets produkter eller tjänster"
+                  placeholder="t.ex. Fokusera på sport, politik eller ekonomi"
                   rows={3}
                 />
               </div>
               
               <button type="submit" disabled={isLoading} className="btn-primary">
-                {isLoading ? '⏳ Skapar...' : '🚀 Trigga Nu'}
+                {isLoading ? '⏳ AI skapar quiz...' : '🎯 Skapa Quiz Nu'}
               </button>
             </form>
           </section>
 
           {/* Scheduled Jobs */}
           <section className="card">
-            <h2>⏰ Schemalagda Jobb</h2>
+            <h2>⏰ Automatisk Quiz-generering</h2>
             
             <form onSubmit={addScheduledJob} className="form">
               <div className="form-group">
-                <label htmlFor="job-name">Jobbnamn:</label>
+                <label htmlFor="job-name">Namn på automatiska quiz:</label>
                 <input
                   id="job-name"
                   type="text"
                   value={jobName}
                   onChange={(e) => setJobName(e.target.value)}
-                  placeholder="t.ex. 'Daglig trigger'"
+                  placeholder="t.ex. 'Dagens SVT Nyhetsquiz'"
                   required
                 />
               </div>
               
               <div className="form-group">
-                <label htmlFor="cron-pattern">Cron Pattern:</label>
+                <label htmlFor="cron-pattern">Schemalägga när:</label>
                 <input
                   id="cron-pattern"
                   type="text"
                   value={cronPattern}
                   onChange={(e) => setCronPattern(e.target.value)}
-                  placeholder="t.ex. '0 9 * * *' för varje dag 09:00"
+                  placeholder="t.ex. '0 9 * * *' för varje dag kl 09:00"
                   required
                 />
                 <small>
-                  Exempel: '*/5 * * * *' (var 5:e minut), '0 9 * * *' (09:00 varje dag), '0 9 * * 1' (09:00 varje måndag)
+                  Exempel: '0 9 * * *' (09:00 varje dag), '0 9 * * 1' (09:00 varje måndag), '0 18 * * 5' (18:00 varje fredag)
                 </small>
               </div>
               
               <button type="submit" className="btn-secondary">
-                ➕ Lägg till schemalagt jobb
+                ⏰ Schemalägg Quiz
               </button>
             </form>
 
             {scheduledJobs.length > 0 && (
               <div className="jobs-list">
-                <h3>Aktiva schemalagda jobb:</h3>
+                <h3>Schemalagda quiz:</h3>
                 {scheduledJobs.map(job => (
                   <div key={job.id} className="job-item">
                     <div className="job-info">
@@ -288,21 +312,74 @@ export default function RSSTriggersPage() {
             )}
           </section>
 
-          {/* Recent Triggers */}
+          {/* Recent Requests */}
           <section className="card">
-            <h2>📋 Senaste Triggers</h2>
+            <h2>📋 Senaste Quiz-förfrågningar</h2>
             {feedItems.length > 0 ? (
               <div className="feed-items">
-                {feedItems.slice(0, 10).map(item => (
+                {feedItems.slice(0, 5).map(item => (
                   <div key={item.id} className="feed-item">
-                    <div className="feed-title">{item.title}</div>
+                    <div className="feed-title">🎯 Quiz för: {item.title}</div>
                     <div className="feed-description">{item.description}</div>
-                    <div className="feed-date">{new Date(item.pubDate).toLocaleString('sv-SE')}</div>
+                    <div className="feed-date">Skickat: {new Date(item.pubDate).toLocaleString('sv-SE')}</div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="empty-state">Inga triggers skapade än. Tryck på "Trigga Nu" för att skapa din första!</p>
+              <p className="empty-state">Inga quiz-förfrågningar än. Tryck på "Skapa Quiz Nu" för att komma igång!</p>
+            )}
+          </section>
+
+          {/* Created Quizzes */}
+          <section className="card quiz-results">
+            <div className="section-header">
+              <h2>🎯 Färdiga Quiz</h2>
+              <button 
+                onClick={() => fetch('/api/created-quizzes').then(res => res.json()).then(setCreatedQuizzes).catch(() => {})}
+                className="refresh-btn"
+              >
+                🔄 Uppdatera
+              </button>
+            </div>
+            {createdQuizzes.length > 0 ? (
+              <div className="quiz-items">
+                {createdQuizzes.slice(0, 10).map(quiz => (
+                  <div key={quiz.id} className="quiz-item">
+                    <div className="quiz-info">
+                      <div className="quiz-title">
+                        <strong>{quiz.title}</strong>
+                        <span className={`status ${quiz.published ? 'published' : 'draft'}`}>
+                          {quiz.published ? '✅ Publicerat' : '📝 Utkast'}
+                        </span>
+                      </div>
+                      <div className="quiz-meta">
+                        <span className="quiz-date">
+                          Skapad: {new Date(quiz.timestamp).toLocaleString('sv-SE')}
+                        </span>
+                        {quiz.uuid && (
+                          <span className="quiz-id">ID: {quiz.uuid.slice(0, 8)}...</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="quiz-actions">
+                      {quiz.viewUrl ? (
+                        <a 
+                          href={quiz.viewUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="btn-quiz-link"
+                        >
+                          🚀 Visa Quiz
+                        </a>
+                      ) : (
+                        <span className="btn-disabled">Ej tillgänglig</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">Inga quiz skapade än. När AI:n skapar ett quiz från dina förfrågningar visas det här!</p>
             )}
           </section>
         </div>
@@ -331,34 +408,30 @@ export default function RSSTriggersPage() {
             margin-bottom: 20px;
           }
 
-          .rss-link {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-          }
-
-          .rss-link code {
-            background: #fff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin: 0 10px;
-            font-family: 'Monaco', monospace;
-            border: 1px solid #ddd;
-          }
-
-          .copy-btn {
-            background: #007bff;
+          .info-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+          }
+
+          .info-box p {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            font-weight: 500;
+          }
+
+          .info-box small {
+            opacity: 0.8;
             font-size: 12px;
           }
 
-          .copy-btn:hover {
-            background: #0056b3;
+          .info-box code {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', monospace;
           }
 
           .sections {
@@ -568,6 +641,122 @@ export default function RSSTriggersPage() {
             border-color: #dc3545;
           }
 
+          .quiz-results {
+            border: 2px solid #28a745;
+          }
+
+          .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+
+          .quiz-results h2 {
+            color: #28a745;
+            margin: 0;
+          }
+
+          .refresh-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+          }
+
+          .refresh-btn:hover {
+            background: #138496;
+          }
+
+          .quiz-items {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+          }
+
+          .quiz-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #d4edda, #e8f5e8);
+            border-radius: 12px;
+            border-left: 4px solid #28a745;
+          }
+
+          .quiz-info {
+            flex: 1;
+          }
+
+          .quiz-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 8px;
+          }
+
+          .quiz-title strong {
+            color: #155724;
+            font-size: 16px;
+          }
+
+          .status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
+
+          .status.published {
+            background: #28a745;
+            color: white;
+          }
+
+          .status.draft {
+            background: #ffc107;
+            color: #212529;
+          }
+
+          .quiz-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: #6c757d;
+          }
+
+          .quiz-actions {
+            margin-left: 20px;
+          }
+
+          .btn-quiz-link {
+            background: #007bff;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-block;
+          }
+
+          .btn-quiz-link:hover {
+            background: #0056b3;
+            text-decoration: none;
+            color: white;
+          }
+
+          .btn-disabled {
+            background: #6c757d;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+          }
+
           @media (max-width: 768px) {
             .sections {
               grid-template-columns: 1fr;
@@ -577,6 +766,22 @@ export default function RSSTriggersPage() {
               flex-direction: column;
               align-items: flex-start;
               gap: 10px;
+            }
+
+            .quiz-item {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 15px;
+            }
+
+            .quiz-actions {
+              margin-left: 0;
+              width: 100%;
+            }
+
+            .btn-quiz-link {
+              width: 100%;
+              text-align: center;
             }
           }
         `}</style>

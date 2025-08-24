@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { quizStore } from '../../lib/quiz-store';
 
 interface RiddleQuizData {
   type: string;
@@ -91,6 +92,16 @@ export default async function handler(
     // Check if published - Riddle API uses published.at timestamp to indicate published status
     const publishedInfo = responseData.published;
     const isPublished = publishedInfo && publishedInfo.at ? true : false;
+    
+    // Store the quiz result for display
+    const createdQuiz = quizStore.addQuiz({
+      uuid: uuid,
+      title: responseData.title || quizData.build.title,
+      viewUrl: isPublished && uuid ? `https://www.riddle.com/view/${uuid}` : null,
+      created: responseData.created || new Date().toISOString(),
+      published: isPublished,
+      publishedAt: publishedInfo?.at || null,
+    });
     
     return res.status(200).json({
       success: true,
