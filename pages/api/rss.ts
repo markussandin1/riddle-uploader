@@ -15,7 +15,7 @@ export default async function handler(
     const rssContent = generateRSSFeed(feedItems, 'RSS Trigger Feed');
     
     res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=60'); // Cache for 1 minute
+    
     
     return res.status(200).send(rssContent);
   } catch (error) {
