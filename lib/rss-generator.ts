@@ -2,7 +2,17 @@ import { FeedItem } from './feed-store';
 
 export const generateRSSFeed = (items: FeedItem[], title: string = 'RSS Trigger Feed'): string => {
   const now = new Date().toUTCString();
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  
+  // Automatically determine base URL based on environment
+  const getBaseUrl = () => {
+    // In production, use VERCEL_URL if available, otherwise fallback to env var or localhost
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  };
+  
+  const baseUrl = getBaseUrl();
   
   const rssItems = items.map(item => `
     <item>

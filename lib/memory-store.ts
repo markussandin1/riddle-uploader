@@ -49,11 +49,20 @@ export const loadFeedItems = (): FeedItem[] => {
 export const addFeedItem = (title?: string, description?: string): FeedItem => {
   updateActivity();
   
+  // Automatically determine base URL based on environment
+  const getBaseUrl = () => {
+    // In production, use VERCEL_URL if available, otherwise fallback to env var or localhost
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  };
+  
   const newItem: FeedItem = {
     id: uuidv4(),
     title: title || `RSS Trigger ${new Date().toLocaleString('sv-SE')}`,
     description: description || `Triggered at ${new Date().toISOString()}`,
-    link: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/trigger/${uuidv4()}`,
+    link: `${getBaseUrl()}/trigger/${uuidv4()}`,
     pubDate: new Date(),
     guid: uuidv4()
   };
