@@ -18,26 +18,13 @@ export interface ScheduledJob {
   nextRun?: Date;
 }
 
-// In-memory storage (will reset on serverless function cold starts)
+// Simple in-memory storage (will reset on serverless function cold starts)
 let feedItems: FeedItem[] = [];
 let scheduledJobs: ScheduledJob[] = [];
 
-// Initialize with some sample data if empty
-const initializeSampleData = () => {
-  if (feedItems.length === 0) {
-    feedItems.push({
-      id: uuidv4(),
-      title: 'Welcome to RSS Triggers',
-      description: 'This is your first RSS trigger item. Create more by using the manual trigger or scheduled jobs.',
-      link: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/trigger/${uuidv4()}`,
-      pubDate: new Date(),
-      guid: uuidv4()
-    });
-  }
-};
+// No initialization - start with empty feed
 
 export const loadFeedItems = (): FeedItem[] => {
-  initializeSampleData();
   // Return items sorted by date (newest first)
   return [...feedItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 };

@@ -35,12 +35,15 @@ export default function HomePage() {
   useEffect(() => {
     fetchData();
     
-    // Auto-refresh every 30 seconds to show new quizzes
+    // Auto-refresh every 30 seconds to show new quizzes and feed items
     const interval = setInterval(() => {
-      fetch('/api/created-quizzes')
-        .then(res => res.ok ? res.json() : [])
-        .then(quizzes => setCreatedQuizzes(quizzes))
-        .catch(() => {}); // Silent fail
+      Promise.all([
+        fetch('/api/feed-items').then(res => res.ok ? res.json() : []),
+        fetch('/api/created-quizzes').then(res => res.ok ? res.json() : [])
+      ]).then(([items, quizzes]) => {
+        setFeedItems(items);
+        setCreatedQuizzes(quizzes);
+      }).catch(() => {}); // Silent fail
     }, 30000);
     
     return () => clearInterval(interval);
@@ -91,7 +94,10 @@ export default function HomePage() {
         const result = await response.json();
         showMessage('success', `🎯 Quiz request sent for: ${result.title}. Your quiz is being created!`);
         setCustomTitle('');
-        fetchData();
+        // Force immediate refresh of feed items to show the new trigger
+        setTimeout(() => {
+          fetchData();
+        }, 500); // Small delay to ensure the trigger is saved
       } else {
         showMessage('error', 'Fel vid skapande av quiz-förfrågan');
       }
