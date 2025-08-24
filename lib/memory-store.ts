@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 export interface FeedItem {
   id: string;
@@ -18,15 +20,61 @@ export interface ScheduledJob {
   nextRun?: Date;
 }
 
-// Simple in-memory storage (will reset on serverless function cold starts)
-let feedItems: FeedItem[] = [];
-let scheduledJobs: ScheduledJob[] = [];
+// Use /tmp directory for simple persistence in serverless
+const TMP_DIR = '/tmp';
+const FEED_ITEMS_FILE = path.join(TMP_DIR, 'feed-items.json');
+const SCHEDULED_JOBS_FILE = path.join(TMP_DIR, 'scheduled-jobs.json');
 
-// No initialization - start with empty feed
+// Simple file-based storage using /tmp (temporary but shared across function invocations)
+const loadFeedItemsFromFile = (): FeedItem[] => {
+  try {
+    if (fs.existsSync(FEED_ITEMS_FILE)) {
+      const data = fs.readFileSync(FEED_ITEMS_FILE, 'utf8');
+      const items = JSON.parse(data);
+      // Convert date strings back to Date objects
+      return items.map((item: any) => ({
+        ...item,
+        pubDate: new Date(item.pubDate)
+      }));
+    }
+  } catch (error) {
+    console.error('Error loading feed items from /tmp:', error);
+  }
+  return [];
+};
+
+const saveFeedItemsToFile = (items: FeedItem[]) => {
+  try {
+    fs.writeFileSync(FEED_ITEMS_FILE, JSON.stringify(items, null, 2));
+  } catch (error) {
+    console.error('Error saving feed items to /tmp:', error);
+  }
+};
+
+const loadScheduledJobsFromFile = (): ScheduledJob[] => {
+  try {
+    if (fs.existsSync(SCHEDULED_JOBS_FILE)) {
+      const data = fs.readFileSync(SCHEDULED_JOBS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error loading scheduled jobs from /tmp:', error);
+  }
+  return [];
+};
+
+const saveScheduledJobsToFile = (jobs: ScheduledJob[]) => {
+  try {
+    fs.writeFileSync(SCHEDULED_JOBS_FILE, JSON.stringify(jobs, null, 2));
+  } catch (error) {
+    console.error('Error saving scheduled jobs to /tmp:', error);
+  }
+};
 
 export const loadFeedItems = (): FeedItem[] => {
+  const items = loadFeedItemsFromFile();
   // Return items sorted by date (newest first)
-  return [...feedItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  return items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 };
 
 export const addFeedItem = (title?: string, description?: string): FeedItem => {
@@ -39,18 +87,18 @@ export const addFeedItem = (title?: string, description?: string): FeedItem => {
     guid: uuidv4()
   };
   
-  feedItems.unshift(newItem); // Add to beginning
+  const items = loadFeedItemsFromFile();
+  items.unshift(newItem); // Add to beginning
   
-  // Keep only last 50 items in memory
-  if (feedItems.length > 50) {
-    feedItems = feedItems.slice(0, 50);
-  }
+  // Keep only last 50 items
+  const limitedItems = items.slice(0, 50);
+  saveFeedItemsToFile(limitedItems);
   
   return newItem;
 };
 
 export const loadScheduledJobs = (): ScheduledJob[] => {
-  return [...scheduledJobs];
+  return loadScheduledJobsFromFile();
 };
 
 export const addScheduledJob = (name: string, cronPattern: string, enabled: boolean = true): ScheduledJob => {
@@ -61,15 +109,20 @@ export const addScheduledJob = (name: string, cronPattern: string, enabled: bool
     enabled
   };
   
-  scheduledJobs.push(newJob);
+  const jobs = loadScheduledJobsFromFile();
+  jobs.push(newJob);
+  saveScheduledJobsToFile(jobs);
+  
   return newJob;
 };
 
 export const updateScheduledJob = (id: string, updates: Partial<ScheduledJob>): boolean => {
-  const index = scheduledJobs.findIndex(job => job.id === id);
+  const jobs = loadScheduledJobsFromFile();
+  const index = jobs.findIndex(job => job.id === id);
   
   if (index !== -1) {
-    scheduledJobs[index] = { ...scheduledJobs[index], ...updates };
+    jobs[index] = { ...jobs[index], ...updates };
+    saveScheduledJobsToFile(jobs);
     return true;
   }
   
@@ -77,10 +130,12 @@ export const updateScheduledJob = (id: string, updates: Partial<ScheduledJob>): 
 };
 
 export const deleteScheduledJob = (id: string): boolean => {
-  const index = scheduledJobs.findIndex(job => job.id === id);
+  const jobs = loadScheduledJobsFromFile();
+  const index = jobs.findIndex(job => job.id === id);
   
   if (index !== -1) {
-    scheduledJobs.splice(index, 1);
+    jobs.splice(index, 1);
+    saveScheduledJobsToFile(jobs);
     return true;
   }
   
