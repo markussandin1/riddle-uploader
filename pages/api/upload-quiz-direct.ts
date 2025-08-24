@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { quizStore } from '../../lib/quiz-store';
+import { addCreatedQuiz } from '../../lib/kv-store';
 
 interface RiddleQuizData {
   type: string;
@@ -94,7 +94,7 @@ export default async function handler(
     const isPublished = publishedInfo && publishedInfo.at ? true : false;
     
     // Store the quiz result for display
-    const createdQuiz = quizStore.addQuiz({
+    const createdQuiz = await addCreatedQuiz({
       uuid: uuid,
       title: responseData.title || quizData.build.title,
       viewUrl: isPublished && uuid ? `https://www.riddle.com/view/${uuid}` : null,
